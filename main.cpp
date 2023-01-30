@@ -1,37 +1,42 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include "basic_string.cpp"
 #include <unistd.h>
 #include <stdlib.h>
-#include "kv.cpp"
-#include "random"
 #include <string>
 #include <map>
 #include <iostream>
-#include "sstable.cpp"
+#include <random>
 #include <sstream> 
+#include "basic_string.cpp"
+#include "kv.cpp"
+#include "sstable.cpp"
+#include "utils.cpp"
 
 
 
 //#define MAKE
 
 
-char* map_file(const char *file_name)
+
+
+
+
+void flush_v(const char *file_name , std::vector<std::pair<std::string , std::string>> &s )
 {
-    long result;
-    int fd = open(file_name , O_CREAT | O_RDWR , (mode_t) 0600);
-    long file_size = lseek(fd , 0 , SEEK_END);
-    char *ptr = (char*) mmap(0 , file_size , PROT_READ | PROT_WRITE , MAP_SHARED , fd , 0);
+    std::map<basic_string , basic_string> mapping;
     
-    result = write(fd, "", 1);
-    if (result != 1) {
-        close(fd);
-        perror("Error writing last byte of the file");
-        exit(EXIT_FAILURE);
+    basic_string b;
+    basic_string c;
+
+    for (auto &p : s)
+    {
+        b.setstr(p.first.c_str() , p.first.size());
+        c.setstr(p.second.c_str() , p.second.size());
+        mapping.insert({std::move(b) , std::move(c)});
     }
 
-    return ptr;
+    flush_to_file(file_name , &mapping);
 }
 
 
@@ -42,41 +47,26 @@ unsigned tomod = 198723;
 unsigned opnum = 97321;
    
 #ifdef MAKE
+    using data_type = std::vector<std::pair<std::string , std::string>>;
     
-    std::map<basic_string , basic_string> mapping;
+    data_type v1 = {
+        {"Harry" , "Jane1"} ,
+        {"Germany" , "Berlin"}
+    };
     
-    basic_string b;
-    basic_string c;
+    flush_v("db_testing_level1_0.db" , v1);
 
-    std::string a1 = "Harry";
-    std::string a2 = "Jane1";
-
-    b.setstr(a1.c_str() , a1.size());
-    c.setstr(a2.c_str() , a2.size());
-
-
-    mapping.insert({b , c});
-
-    flush_to_file("db_testing_level1.db" , &mapping);
-
-    std::map<basic_string , basic_string> mapping2;
+    data_type v2 = {
+        {"Harry" , "Jane2"} ,
+    };
     
-
-    a1 = "Harry";
-    a2 = "Jane2";
-
-    b.setstr(a1.c_str() , a1.size());
-    c.setstr(a2.c_str() , a2.size());
-
-
-    mapping2.insert({b , c});
-
-    flush_to_file("db_testing_level2.db" , &mapping2);
+    flush_v("db_testing_level1_1.db" , v2);
+    
     
 #else
     
-    auto ptr1 = map_file("db_testing_level1.db");
-    auto ptr2 = map_file("db_testing_level2.db");
+    auto ptr1 = map_file("db_testing_level1_0.db");
+    auto ptr2 = map_file("db_testing_level1_1.db");
     
     sstable table1(ptr1);
     sstable table2(ptr2);

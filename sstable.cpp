@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <queue>
+#include "utils.cpp"
 // as in my design , each kv pair is of differen size
 // so need a side table for O(log(n)) search
 
@@ -193,40 +194,68 @@ public:
     {
         return st.len;
     }
+
+    unsigned on_disk_len() const
+    {
+        return hdr -> side_table_offset + sizeof(long) + len() * sizeof(long);
+    }
 };
 
 
 void merge_sstable(const char *file_name , std::vector<sstable*> sstable_list)
 {
-    using tuple_type = std::tuple<basic_string , basic_string , int>;
+    using tuple_type = std::tuple<basic_string , basic_string , int , int>;
     unsigned sstable_no = sstable_list.size();
-    auto cmp = [](std::tuple<basic_string , basic_string , int> &x , std::tuple<basic_string , basic_string , int> &y)
+    auto cmp = [](tuple_type &x , tuple_type &y)
     {
-        if (std::get<0>(x) == std::get<0>(x))   
-            return std::get<0>(x) > std::get<0>(x);
+        if (std::get<0>(x) == std::get<0>(y))   
+            return std::get<2>(y) < std::get<2>(y);
         else
-            return std::get<2>(x) < std::get<2>(x);
+            return std::get<0>(x) > std::get<0>(y);
     };
     std::priority_queue< tuple_type , std::vector<tuple_type> , decltype(cmp)> pq(cmp);
 
     std::vector<unsigned> track(sstable_no);
     basic_string cur;
-
+    long total_size = 0;
     for (int i = 0 ; i < sstable_no ; i ++)
     {
         pq.push(
-            {(*sstable_list[i])[0].first , (*sstable_list[i])[0].second , i}
+            {(*sstable_list[i])[0].first , (*sstable_list[i])[0].second , i , 0}
         );
+        total_size += sstable_list[i] -> on_disk_len();
     }
 
+    char *ptr = create_file(file_name , total_size);
+    char *start_ptr = ptr;
+    sstable_hdr *hdr = (sstable_hdr *) ptr;
+    ptr += sizeof(sstable_hdr);
+
+    hdr -> data_offset = (unsigned) (ptr - start_ptr);
+
+    unsigned count = 0;
     while (!pq.empty())
     {
-        std::get<0>(pq.top()).print();
-        std::cout << " : ";
-        std::get<1>(pq.top()).print();
-        std::cout << " : " << std::get<2>(pq.top()) << '\n';
+        auto top = pq.top();
+        int sstable_index = std::get<2>(top);
+        int index = std::get<3>(top);
         pq.pop();
+        if (cur < std::get<0>(top))
+        {
+            count ++;
+            kv _kv(std::get<0>(top) , std::get<1>(top));
+            ptr += _kv.serialze(ptr);
+            std::get<0>(top).print() ; std::cout << " , "; std::get<1>(top).print() ; std::cout << " : " <<  sstable_index << '\n';  
+            cur = std::get<0>(top);
+        }
+
+        if (index + 1 < sstable_list[sstable_index] -> len())
+        {
+            pq.push({(*sstable_list[sstable_index])[index + 1].first , (*sstable_list[sstable_index])[index + 1].second , sstable_index , index + 1});
+        }
     }
+
+    *((long *) ptr) = count;
 
 
 }
