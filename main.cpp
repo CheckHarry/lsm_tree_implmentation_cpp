@@ -12,7 +12,7 @@
 #include "kv.cpp"
 #include "sstable.cpp"
 #include "utils.cpp"
-
+#include "db.cpp"
 
 
 //#define MAKE

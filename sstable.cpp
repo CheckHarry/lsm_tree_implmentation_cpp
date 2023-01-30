@@ -230,7 +230,7 @@ void merge_sstable(const char *file_name , std::vector<sstable*> sstable_list)
     char *start_ptr = ptr;
     sstable_hdr *hdr = (sstable_hdr *) ptr;
     ptr += sizeof(sstable_hdr);
-
+    char *data_ptr = ptr;
     hdr -> data_offset = (unsigned) (ptr - start_ptr);
 
     unsigned count = 0;
@@ -254,8 +254,16 @@ void merge_sstable(const char *file_name , std::vector<sstable*> sstable_list)
             pq.push({(*sstable_list[sstable_index])[index + 1].first , (*sstable_list[sstable_index])[index + 1].second , sstable_index , index + 1});
         }
     }
-
+    
     *((long *) ptr) = count;
+    long *side_table_ptr = (long *) (ptr + sizeof(long));
+    for (unsigned i = 0 ;i < count; i ++)
+    {
+        ondisk_kv_hdr *kv_hdr_ptr = (ondisk_kv_hdr *) data_ptr;
 
+        side_table_ptr[i] = (long) (data_ptr - start_ptr);
+        ptr += sizeof(long);
+        data_ptr += kv_hdr_ptr -> key_len + kv_hdr_ptr -> value_len + 2 * sizeof(unsigned);
+    }
 
 }
